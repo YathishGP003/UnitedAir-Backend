@@ -1,0 +1,175 @@
+spring:
+  application:
+    name: unitedair-ai
+
+  datasource:
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/unitedair}
+    username: ${DB_USERNAME:unitedair}
+    password: ${DB_PASSWORD:unitedair}
+    hikari:
+      maximum-pool-size: 20
+      connection-timeout: 20000
+      pool-name: unitedair-pool
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+
+  # Virtual threads: the retrieval lanes fan out per request and are IO bound,
+  # so platform-thread pools would be the limiting factor.
+  threads:
+    virtual:
+      enabled: true
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+  ai:
+    openai:
+      base-url: ${LLM_BASE_URL:https://models.github.ai/inference}
+      api-key: ${GITHUB_TOKEN:not-configured}
+      chat:
+        options:
+          model: ${LLM_CHAT_MODEL:openai/gpt-4.1}
+          temperature: ${LLM_TEMPERATURE:0.2}
+      embedding:
+        # GitHub Models serves embeddings at <base-url>/embeddings, NOT at Spring AI's
+        # default /v1/embeddings - that path returns 404. Chat happens to work on both
+        # /chat/completions and /v1/chat/completions, which is what made this hard to
+        # spot: chat succeeded while every embedding silently failed over to the local
+        # fallback, putting queries in a different vector space from the corpus and
+        # turning the semantic lane into noise.
+        embeddings-path: ${LLM_EMBED_PATH:/embeddings}
+        options:
+          model: ${LLM_EMBED_MODEL:openai/text-embedding-3-small}
+          dimensions: ${LLM_EMBED_DIMENSIONS:1536}
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# ============================================================================
+#  UnitedAir AI application configuration
+#  Every value below traces to a numbered clause of the SRS.
+# ============================================================================
+unitedair:
+
+  # live | offline | auto   (see .env.example)
+  ai-mode: ${UNITEDAIR_AI_MODE:auto}
+
+  rag:
+    similarity-threshold: ${RAG_SIMILARITY_THRESHOLD:0.50}
+    escalation-confidence: ${RAG_ESCALATION_CONFIDENCE:0.40}
+    lexical-enabled: ${RAG_LEXICAL_ENABLED:false}
+    # SRS 4.1.1 - no LLM-only answers, ever
+    allow-empty-context: false
+
+    fast:
+      vector-top-k: 12
+      lexical-top-k: 12
+      rerank-keep: 6
+      generate-from: 4
+    deep:
+      vector-top-k: 20
+      lexical-top-k: 20
+      rerank-keep: 8
+      generate-from: 6
+
+    # Evaluator-Optimizer: one repair attempt, then escalate
+    max-repair-attempts: 1
+    max-tool-calls-per-request: 3
+    # Reciprocal Rank Fusion smoothing constant
+    rrf-k: 60
+
+  chat-memory:
+    max-turns: 10                  # SRS 4.3.1
+    session-timeout-minutes: 30    # SRS 4.3.1
+
+  followups:
+    minimum: 2                     # SRS 4.3.3
+
+  operational-query:
+    max-queries-per-turn: 3
+    max-joins-per-query: 2
+    default-row-limit: 20
+    max-row-limit: 50
+    max-cells-per-turn: 1000
+    timeout-ms: 1500
+
+  security:
+    jwt-secret: ${JWT_SECRET:}
+    jwt-ttl-minutes: 60
+
+  providers:
+    mode: ${UNITEDAIR_PROVIDER_MODE:simulator}
+    ndc:
+      base-url: ${NDC_BASE_URL:}
+      api-key: ${NDC_API_KEY:}
+      connect-timeout-ms: ${NDC_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${NDC_READ_TIMEOUT_MS:5000}
+    reservation:
+      base-url: ${RESERVATION_BASE_URL:}
+      api-key: ${RESERVATION_API_KEY:}
+      connect-timeout-ms: ${RESERVATION_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${RESERVATION_READ_TIMEOUT_MS:5000}
+
+  ingestion:
+    max-file-mb: 20
+    allowed-types: [PDF, DOCX, TXT]
+    embed-batch-size: 16
+    embed-backoff-ms: 2000
+    embed-max-retries: 4
+    chunk-target-chars: 1100
+    chunk-overlap-chars: 150
+    chunk-min-chars: 200
+    # Auto-ingest the bundled KB corpus on first startup
+    seed-on-startup: ${KB_SEED_ON_STARTUP:true}
+    seed-directory: ${KB_SEED_DIRECTORY:../kb}
+
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    '[com.unitedair.ai]': DEBUG
+    '[org.springframework.web]': INFO
+    '[org.springframework.security]': INFO
+    '[org.flywaydb]': INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+
+info:
+  app:
+    name: UnitedAir AI
+    description: Agentic RAG Smart Flight Booking Assistant
+    srs-version: "1.0"

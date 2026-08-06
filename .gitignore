@@ -1,0 +1,51 @@
+# Compiled / build outputs
+/target/
+/build/
+/out/
+**/target/
+**/build/
+
+# IDE files
+/.idea/
+/.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+*.pid
+*.swp
+*.swo
+
+# Local environment and secrets
+.env
+.env.*
+*.env
+*.local
+*.local.yml
+*.local.yaml
+application-local.yml
+application-local.yaml
+application-dev.yml
+application-dev.yaml
+application-prod.yml
+application-prod.yaml
+
+# Java / Maven tool caches
+/.mvn/wrapper/maven-wrapper.jar
+/.mvn/wrapper/maven-wrapper.properties
+
+# Optional: local database / generated data
+/db-data/
+*.sqlite
+*.db
